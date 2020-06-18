@@ -1,39 +1,126 @@
 ---
-title: "R - Datos raster 1"
-output: 
-  flexdashboard::flex_dashboard:
-    orientation: columns
-    vertical_layout: fill
+title: "GF-0604 Procesamiento de datos geográficos<br>Laboratorio 04: R - Datos raster 1"
+author: "Allan Chinchilla Arias"
+date: "2020-06-18"
+output:
+  html_document:
+    theme: readable    
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: false  
 ---
 
 ```{r setup, include=FALSE}
-
+knitr::opts_chunk$set(echo = TRUE)
 ```
 
-Column {data-width=650}
------------------------------------------------------------------------
+## Descripción general
+En este laboratorio, elaborará un mapa web con el paquete [Leaflet](https://cran.r-project.org/web/packages/leaflet/) del lenguaje de programación [R](https://www.r-project.org/), para visualizar datos ambientales y de biodiversidad. El resultado final será un documento en la sintaxis [R Markdown](https://rmarkdown.rstudio.com/), publicado en [GitHub Pages](https://pages.github.com/).
 
-### Chart A
+## Fecha de entrega y entregables
+La fecha límite de entrega de este laboratorio es el **jueves 18 de junio de 2020**. **NO SE ACEPTARÁN ENTREGAS DESPUÉS DE ESA FECHA**. Debe enviarle al profesor por correo electrónico la dirección del sitio en GitHub Pages resultante.
 
-```{r}
+La tarea puede realizarse en grupos de un máximo de tres estudiantes.
 
+## Trabajo previo
+Se recomienda leer el material preparado por el profesor y consultar los recursos listados en:
+
+* [Lección 10: el lenguaje de programación R - Datos raster](https://geoprocesamiento-2020i.github.io/leccion-10-r-datos-raster/).
+
+## Tareas a realizar
+Elabore un mapa web que contenga:
+
+1. (10%) Tres capas base tipo  ```Tile```.
+2. (20%) Dos capas raster: altitud y promedio de precipitación, provenientes de la base de datos [WorldClim](https://www.worldclim.org/) y recortadas para los límites de Costa Rica y en resolución de 30x30 segundos.
+3. (20%) Dos capas vectoriales correspondientes a los registros de presencia de las especies de aves [Ara ambiguus](https://github.com/geoprocesamiento-2020i/datos/blob/master/biodiversidad/registros-presencia/cr/cr-ara-ambiguus.geojson) (lapa verde) y [Pharomachrus mocinno](https://github.com/geoprocesamiento-2020i/datos/blob/master/biodiversidad/registros-presencia/cr/cr_pharomachrus_mocinno.geojson) (quetzal).
+4. (20%) Un control de capas que permita activar y desactivar todas las capas.
+5. (20%) Leyendas para las dos capas raster. Elija con cuidado las paletas de colores de ambas capas.
+6. (10%) Un control de mapa de referencia (_MiniMap_).
+
+
+```{r, message=FALSE, warning=FALSE}
+library(sf)
+library(dplyr)
+library(leaflet)
+library(raster)
+library(rgdal)
+lapa_verde <-
+  st_read(
+    "https://raw.githubusercontent.com/geoprocesamiento-2020i/datos/master/biodiversidad/registros-presencia/cr/cr-ara-ambiguus.geojson"
+  )
+quetzal <-
+    st_read(
+        "https://raw.githubusercontent.com/geoprocesamiento-2020i/datos/master/biodiversidad/registros-presencia/cr/cr_pharomachrus_mocinno.geojson"
+    )
+altitude <- getData("worldclim", var="alt", res=.5, lon=-84, lat=10)
+cr_altitude <- crop(altitude, extent(-86, -82.3, 8, 11.3))
+pal <- colorNumeric(
+  c("#00FF00", "#7FFF00", "#FFFF00", "#FF7F00", "#FF0000"), 
+  values(cr_altitude), 
+  na.color = "transparent"
+)
+precip <- getData("worldclim", var="bio", res=.5, lon=-84, lat=10)
+cr_precip <- crop(precip, extent(-86, -82.3, 8, 11.3))
+pal2 <- colorNumeric(
+  c("#FFC0CB", "#C3C7DB", "#87CEEB", "#4367BB", "#00008B"), 
+  values(cr_precip), 
+  na.color = "transparent")
+m <- leaflet() %>% 
+  addProviderTiles(providers$Esri.WorldImagery, group = "Imágenes de ESRI") %>% 
+  addProviderTiles(providers$Stamen.TonerLite, group = "Stamen Toner Lite") %>%
+  addProviderTiles(providers$OpenStreetMap.Mapnik, group = "OpenStreetMap") %>%
+  addCircleMarkers(data = lapa_verde,
+                   stroke = F,
+                   radius = 4,
+                   fillColor = 'green',
+                   fillOpacity = 1,
+                   group = "Ara ambiguus",
+                   popup = paste(lapa_verde$locality, 
+                                 lapa_verde$year, 
+                                 sep = '<br/>')) %>% 
+    addCircleMarkers(data = quetzal,
+                   stroke = F,
+                   radius = 4,
+                   fillColor = 'red',
+                   fillOpacity = 1,
+                   group = "Pharomachrus mocinno",
+                   popup = paste(quetzal$locality, 
+                                 quetzal$year, 
+                                 sep = '<br/>'))%>%
+  addRasterImage(cr_altitude, 
+                 colors = pal, 
+                 opacity = 0.8, 
+                 group = "Altitud"
+  ) %>%
+  addRasterImage(cr_precip$bio12_23, 
+                 colors = pal2, 
+                 opacity = 0.8, 
+                 group = "Precipitaciones"
+  )%>%
+  addLayersControl(
+    baseGroups = c("OpenStreetMap", "Stamen Toner Lite", "Imágenes de ESRI"),
+    overlayGroups = c("Altitud","Precipitaciones", "Ara ambiguus", "Pharomachrus mocinno"),
+    options = layersControlOptions(collapsed = FALSE)    
+  )%>% 
+  addMiniMap(
+    toggleDisplay = TRUE,
+    position = "bottomleft",
+    tiles = providers$Stamen.TonerLite
+  ) %>%
+  addLegend(pal = pal, 
+            values = values(cr_altitude), 
+            title = "Altitud", position = "bottomleft"
+  )%>% 
+  addLegend(pal = pal2, 
+            values = values(cr_precip), 
+            title = "Prom. de 
+            precipitaciones", position = "bottomright",
+)
+m
 ```
 
 
-### Chart B
+Los mapas deben ser implementados con el paquete ```Leaflet```.
 
-```{r}
-
-```
-
-### Chart C
-
-```{r}
-
-```
-
-### Chart D
-
-```{r}
-
-```
+##
